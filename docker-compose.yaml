@@ -1,0 +1,33 @@
+version: '3'
+
+services:
+  psql:
+    image: postgres:15
+    ports:
+      - 5432:5432
+    volumes:
+      - gust_data:/var/lib/postgresql/data
+      # - ./init:/docker-entrypoint-initdb.d/
+    environment:
+      POSTGRES_PASSWORD: example
+    healthcheck:
+      test: ["CMD", "pg_isready"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+  pgadmin:
+    image: dpage/pgadmin4
+    ports:
+      - 8080:80
+    volumes:
+      - pgadmin_data:/pgadmin4
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=bogus@0xa1.red
+      - PGADMIN_DEFAULT_PASSWORD=testing
+
+volumes:
+  gust_data:
+    driver: local
+  pgadmin_data:
+    driver: local

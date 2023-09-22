@@ -1,0 +1,5 @@
+<ul>
+{% for gust in gusts %}
+  <li><a href="/g/{{ gust.key }}" target="_blank">{{ gust.title }}</a></li>
+{% endfor %}
+</ul>
