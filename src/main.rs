@@ -1,20 +1,15 @@
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::Json,
-    routing::get,
-    Router,
-};
-use diesel::{QueryDsl, SelectableHelper, prelude::*};
+use axum::{extract::{Path, State}, http::{HeaderValue, Method, StatusCode}, response::Json, routing::get, Router};
+use diesel::{prelude::*, QueryDsl, SelectableHelper};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use model::{Gust, GustDisplay};
+use model::{Gust, GustDisplay, GustListItem};
 use std::net::SocketAddr;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tower_http::cors::CorsLayer;
 
 pub mod connection;
+pub mod error;
 pub mod model;
 pub mod schema;
-pub mod error;
 
 #[tokio::main]
 async fn main() {
@@ -45,6 +40,13 @@ async fn main() {
     // build our application with a route
     let app = Router::new()
         .route("/", get(root))
+        .route("/g/:gust_key", get(gust))
+        .layer(
+            CorsLayer::new()
+                .allow_origin("http://localhost:3000".parse::<HeaderValue>().unwrap())
+                .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
+                .allow_methods([Method::GET]),
+        )
         .with_state(pool);
 
     // run our app with hyper
@@ -59,7 +61,7 @@ async fn main() {
 
 async fn root(
     State(pool): State<deadpool_diesel::postgres::Pool>,
-) -> Result<Json<Vec<GustDisplay>>, (StatusCode, String)> {
+) -> Result<Json<Vec<GustListItem>>, (StatusCode, String)> {
     let conn = pool.get().await.map_err(error::internal_error)?;
     let res = conn
         .interact(|conn| schema::gusts::table.select(Gust::as_select()).load(conn))
@@ -69,10 +71,9 @@ async fn root(
 
     let mut display = Vec::new();
     res.iter().for_each(|g| {
-        let d = GustDisplay{
+        let d = GustListItem {
             key: g.key.clone(),
             title: g.title.clone(),
-            content: String::from_utf8(g.content.clone()).expect("invalid utf8 sequence in content"),
             created_at: g.created_at,
             accessed: g.accessed,
             starred: g.starred,
@@ -82,4 +83,39 @@ async fn root(
     });
 
     Ok(Json(display))
+}
+
+async fn gust(
+    Path(gust_key): Path<String>,
+    State(pool): State<deadpool_diesel::postgres::Pool>,
+) -> Result<Json<GustDisplay>, (StatusCode, String)> {
+    let conn = pool.get().await.map_err(error::internal_error)?;
+    let res: Result<Option<Gust>, diesel::result::Error> = conn
+        .interact(|conn| {
+            schema::gusts::table
+                .filter(crate::schema::gusts::key.eq(gust_key))
+                .select(Gust::as_select())
+                .first(conn)
+                .optional()
+        })
+        .await
+        .map_err(error::internal_error)?;
+
+    match res {
+        Ok(Some(gust)) => {
+            let d = GustDisplay {
+                key: gust.key.clone(),
+                title: gust.title.clone(),
+                content: String::from_utf8(gust.content.clone()).expect("Found invalid UTF-8"),
+                created_at: gust.created_at,
+                accessed: gust.accessed,
+                starred: gust.starred,
+            };
+            return Ok(Json(d))
+        },
+        Ok(None) => {
+            return Err((StatusCode::NOT_FOUND, String::from("Gust not found")))
+        },
+        Err(e) => return Err((StatusCode::NOT_FOUND, e.to_string())),
+    }
 }

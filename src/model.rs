@@ -29,3 +29,12 @@ pub struct GustDisplay {
     pub accessed: Option<i32>,
     pub starred: Option<i32>,
 }
+
+#[derive(Serialize, Debug)]
+pub struct GustListItem {
+    pub key: String,
+    pub title: String,
+    pub created_at: SystemTime,
+    pub accessed: Option<i32>,
+    pub starred: Option<i32>,
+}
