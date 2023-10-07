@@ -16,5 +16,7 @@ diesel::table! {
         starred -> Nullable<Int4>,
         #[max_length = 200]
         title -> Varchar,
+        #[max_length = 200]
+        language -> Varchar,
     }
 }
