@@ -142,8 +142,7 @@ async fn gust(
 }
 
 async fn langs() -> Result<Json<HashMap<String, Language>>, (StatusCode, String)> {
-    let languages = get_languages();
-    return Ok(Json(languages));
+    return Ok(Json(get_languages()));
 }
 
 async fn new_gust(
